@@ -6,8 +6,102 @@ import { insertUsuarioSchema, loginUsuarioSchema, updateUsuarioSchema } from "@s
 import { evaluateAndCreateNotificationsForUserOnDate } from "./notifications";
 import { sendEmailNotification } from "./email";
 import fhirRouter from './fhir/routes';
+import multer from 'multer';
+import sharp from 'sharp';
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Multer para recibir imágenes en memoria
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
+
+  // Función auxiliar: mapea distintos formatos de predicción a una forma uniforme
+  const mapPredictions = (preds: any): Array<{ food: string | null; calories: number | null; calories_raw?: number | null; confidence: number | null; note?: string | null }> => {
+    if (!preds) return [];
+    const arr = Array.isArray(preds) ? preds : [preds];
+    return arr.map((p: any) => {
+      if (typeof p === 'string') {
+        return { food: p, calories: null, confidence: null };
+      }
+
+      const food = p.label || p.name || p.food || p.prediction || p.class || p.title || p.group || null;
+
+      // Intentar encontrar calorías en varias rutas posibles del objeto
+      const calories_raw = ((): number | null => {
+        if (p.calories != null) return Number(p.calories);
+        if (p.kcal != null) return Number(p.kcal);
+        if (p.calorie != null) return Number(p.calorie);
+        if (p.energy_kcal != null) return Number(p.energy_kcal);
+        if (p.nutrition && (p.nutrition.calories != null || p.nutrition.kcal != null)) {
+          return Number(p.nutrition.calories ?? p.nutrition.kcal);
+        }
+        if (p.nutrients) {
+          if (p.nutrients.calories != null) return Number(p.nutrients.calories);
+          if (p.nutrients.kcal != null) return Number(p.nutrients.kcal);
+        }
+        // Si el objeto tiene items (p.pattern de CalorieMama), intentar extraer de items[0]
+        if (p.items && Array.isArray(p.items) && p.items.length) {
+          const it = p.items[0];
+          if (typeof it === 'string') {
+            // nada que extraer
+          } else {
+            if (it.calories != null) return Number(it.calories);
+            if (it.kcal != null) return Number(it.kcal);
+            if (it.nutrition && (it.nutrition.calories != null || it.nutrition.kcal != null)) return Number(it.nutrition.calories ?? it.nutrition.kcal);
+            if (it.nutrients && (it.nutrients.calories != null || it.nutrients.kcal != null)) return Number(it.nutrients.calories ?? it.nutrients.kcal);
+            if (it.energy_kcal != null) return Number(it.energy_kcal);
+          }
+        }
+        return null;
+      })();
+
+      // Heurística simple: si calories_raw aparece y es razonable, usarla; dejamos el valor sin modificar
+      const calories = typeof calories_raw === 'number' ? calories_raw : null;
+
+      const confidence = ((): number | null => {
+        let val: number | null = null;
+        if (p.confidence != null) val = Number(p.confidence);
+        else if (p.score != null) val = Number(p.score);
+        else if (p.probability != null) val = Number(p.probability);
+        else if (p.prob != null) val = Number(p.prob);
+        else if (p.conf != null) val = Number(p.conf);
+
+        // Si hay items, obtener el mejor score/confidence entre ellos
+        if ((val == null || val === 0) && p.items && Array.isArray(p.items) && p.items.length) {
+          const best = p.items.reduce((acc: number|null, it: any) => {
+            if (!it) return acc;
+            const v = it.confidence ?? it.score ?? it.probability ?? it.prob ?? it.conf ?? null;
+            const num = v != null ? Number(v) : null;
+            if (num == null) return acc;
+            if (acc == null) return num;
+            return Math.max(acc, num);
+          }, null as number | null);
+          if (best != null) val = best;
+        }
+
+        if (val == null) return null;
+        // Normalizar: si el proveedor devuelve porcentajes (ej. 40 o 4000), convertir a 0..1
+        // Aplicar división por 100 repetida hasta que val <= 1 (o hasta 1 iteración límite)
+        let normalized = val;
+        let iterations = 0;
+        while (normalized > 1 && iterations < 5) {
+          normalized = normalized / 100;
+          iterations++;
+        }
+        // Asegurar rango 0..1
+        if (normalized > 1) normalized = 1;
+        if (normalized < 0) normalized = 0;
+        return normalized;
+      })();
+
+      // Señalar notas útiles: valores demasiado altos o inconsistentes
+      let note: string | null = null;
+      if (calories != null && calories > 5000) {
+        note = 'Estimated calories are unusually high; please review (possible per-recipe total or units mismatch)';
+      }
+
+      return { food: food ?? null, calories: calories != null ? Math.round(calories) : null, calories_raw: calories_raw ?? null, confidence, note };
+    });
+  };
+
   // Registrar o actualizar actividad física
   app.post("/api/activity", async (req, res) => {
     try {
@@ -89,6 +183,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (e) {
       console.error('Error registrando alimentación:', e);
       res.status(500).json({ success: false, message: 'Error al registrar alimentación' });
+    }
+  });
+
+  // Endpoint proxy para estimar calorías desde imagen (CalorieMama / Calorify)
+  app.post('/api/estimate-calories', upload.single('image'), async (req, res) => {
+    try {
+      const file = (req as any).file;
+      if (!file) return res.status(400).json({ success: false, message: 'No image provided' });
+
+      const apiUrl = process.env.CALORIE_MAMA_API_URL;
+      const apiKey = process.env.CALORIE_MAMA_API_KEY;
+      if (!apiUrl) return res.status(500).json({ success: false, message: 'CALORIE_MAMA_API_URL not configured' });
+
+      // Según la documentación de CalorieMama: enviar multipart/form-data con campo 'media'
+      // y pasar la clave en query param `user_key=...`.
+      // Intentamos multipart primero; si falla, caeremos a enviar JSON base64.
+      const urlObj = new URL(apiUrl);
+      // Si el proveedor espera la clave en query param, anexarla
+      if (apiKey && !urlObj.searchParams.has('user_key')) {
+        urlObj.searchParams.set('user_key', apiKey);
+      }
+
+      // Recortar / reescalar la imagen a 544x544 (center crop) para cumplir la spec de CalorieMama
+      let processedBuffer = file.buffer;
+      try {
+        processedBuffer = await sharp(file.buffer)
+          .resize(544, 544, { fit: 'cover', position: 'centre' })
+          .toFormat('jpeg')
+          .toBuffer();
+      } catch (e) {
+        console.warn('Image processing failed, using original buffer:', e);
+        processedBuffer = file.buffer;
+      }
+
+      // Intentar enviar la imagen directamente como body binario con Content-Type=image/jpeg
+      try {
+        const contentType = 'image/jpeg';
+        const resp = await fetch(urlObj.toString(), { method: 'POST', headers: { 'Content-Type': contentType }, body: processedBuffer });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          console.error('Calorie service (binary) error', resp.status, text);
+          // si falla, seguiremos al fallback base64
+        } else {
+          const multipartData = await resp.json().catch(async () => {
+            const txt = await resp.text().catch(() => '');
+            console.warn('Calorie service returned non-JSON response (binary):', txt);
+            return null;
+          });
+          if (multipartData) {
+            let predictions: any[] = [];
+            if (Array.isArray(multipartData.predictions)) predictions = multipartData.predictions;
+            else if (Array.isArray(multipartData.results)) predictions = multipartData.results;
+            else if (multipartData.label) predictions = [multipartData];
+
+            const mapped = mapPredictions(predictions);
+            console.debug('Calorie service raw response (binary):', multipartData);
+            return res.json({ success: true, predictions: mapped, raw: multipartData });
+          }
+        }
+      } catch (e) {
+        console.warn('Binary attempt failed, will fallback to JSON base64. Err:', e);
+      }
+
+      // Fallback: Convertir la imagen a base64 y enviar JSON — algunos endpoints lo aceptan
+      const base64 = processedBuffer.toString('base64');
+      const jsonBody = JSON.stringify({ image_base64: base64 });
+
+      const headers: Record<string,string> = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers['x-api-key'] = apiKey;
+      }
+
+      const resp2 = await fetch(apiUrl, { method: 'POST', headers, body: jsonBody });
+      if (!resp2.ok) {
+        const text = await resp2.text().catch(() => '');
+        console.error('Calorie service (json fallback) error', resp2.status, text);
+        return res.status(502).json({ success: false, message: 'Error from calorie service', details: text });
+      }
+
+      const data2 = await resp2.json().catch(async () => {
+        const txt = await resp2.text().catch(() => '');
+        console.warn('Calorie service returned non-JSON response (json fallback):', txt);
+        return null;
+      });
+      let predictions: any[] = [];
+      if (data2) {
+        if (Array.isArray(data2.predictions)) predictions = data2.predictions;
+        else if (Array.isArray(data2.results)) predictions = data2.results;
+        else if (data2.label) predictions = [data2];
+      }
+
+      const mapped = mapPredictions(predictions);
+      console.debug('Calorie service raw response (json fallback):', data2);
+
+      return res.json({ success: true, predictions: mapped, raw: data2 });
+    } catch (e) {
+      console.error('Error in /api/estimate-calories:', e);
+      return res.status(500).json({ success: false, message: 'Internal error' });
     }
   });
 
