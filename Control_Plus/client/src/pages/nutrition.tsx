@@ -305,8 +305,8 @@ export default function Nutrition() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Nutrition Tracking</h1>
-        <p className="text-muted-foreground">Monitor your daily food intake</p>
+        <h1 className="text-3xl font-bold">Seguimiento Nutricional</h1>
+        <p className="text-muted-foreground">Monitorea tu ingesta diaria de alimentos</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -412,25 +412,25 @@ export default function Nutrition() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card data-testid="card-log-meal">
           <CardHeader>
-            <CardTitle>Log Meal</CardTitle>
+            <CardTitle>Registrar comida</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="mealType">Meal Type</Label>
+              <Label htmlFor="mealType">Tipo de comida</Label>
               <Select value={mealType} onValueChange={setMealType}>
                 <SelectTrigger id="mealType" data-testid="select-meal-type">
                   <SelectValue placeholder="Select meal type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="breakfast">Breakfast</SelectItem>
-                  <SelectItem value="lunch">Lunch</SelectItem>
-                  <SelectItem value="dinner">Dinner</SelectItem>
-                  <SelectItem value="snack">Snack</SelectItem>
+                  <SelectItem value="Desayuno">Desayuno</SelectItem>
+                  <SelectItem value="Almuerzo">Almuerzo</SelectItem>
+                  <SelectItem value="Cena">Cena</SelectItem>
+                  <SelectItem value="Merienda">Merienda</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Photo (optional)</Label>
+              <Label>Foto (opcional)</Label>
               <div className="flex items-center gap-2">
                 <input
                   type="file"
@@ -445,11 +445,11 @@ export default function Nutrition() {
                 <img src={previewUrl} alt="preview" className="mt-2 max-h-32 rounded-md" />
               )}
 
-              <Label htmlFor="calories">Calories</Label>
+              <Label htmlFor="calories">Calorias</Label>
               <Input
                 id="calories"
                 type="number"
-                placeholder="Enter calories"
+                placeholder="Ingrese calorías"
                 value={calories}
                 onChange={(e) => setCalories(e.target.value)}
                 data-testid="input-calories"
@@ -476,22 +476,22 @@ export default function Nutrition() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+              <Label htmlFor="date">Fecha</Label>
               <Input id="date" type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
             </div>
             <Button onClick={handleLogMeal} className="w-full" data-testid="button-log-meal">
-              Log Meal
+              Registrar comida
             </Button>
           </CardContent>
         </Card>
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Meals</h3>
+            <h3 className="text-lg font-semibold">Comidas</h3>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" onClick={goPrevWeek}>&lt; Prev</Button>
+              <Button size="sm" variant="ghost" onClick={goPrevWeek}>&lt; Anterior</Button>
               <div className="text-sm text-muted-foreground">{formatWeekRange(weekStart)}</div>
-              <Button size="sm" variant="ghost" onClick={goNextWeek}>Next &gt;</Button>
+              <Button size="sm" variant="ghost" onClick={goNextWeek}>Siguiente &gt;</Button>
             </div>
           </div>
 
