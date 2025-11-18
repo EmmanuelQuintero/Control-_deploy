@@ -3,7 +3,7 @@ function formatDate(iso: string) {
   const [yyyy, mm, dd] = iso.split("-");
   return `${dd}/${mm}/${yyyy}`;
 }
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Footprints, Flame, Clock, Edit2, Check, X } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
@@ -30,6 +30,12 @@ export default function Exercise() {
   const [steps, setSteps] = useState("");
   const [duration, setDuration] = useState("");
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const VISIBLE_HISTORY = 5;
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>(() => {
+    const todayMonth = getTodayISO().slice(0, 7);
+    return { [todayMonth]: true };
+  });
   
   // Estado para la meta de pasos (se guarda en localStorage)
   const [stepsGoal, setStepsGoal] = useState<number>(() => {
@@ -328,18 +334,68 @@ export default function Exercise() {
             <Card data-testid="card-activity-history">
               <CardHeader>
                 <CardTitle>Historial de Actividad</CardTitle>
+                <div className="ml-auto flex items-center gap-3">
+                  <span className="text-sm text-muted-foreground">{activities.length} registros</span>
+                  {activities.length > VISIBLE_HISTORY && (
+                    <Button size="sm" variant="ghost" onClick={() => setShowAllHistory(s => !s)}>
+                      {showAllHistory ? 'Mostrar menos' : `Mostrar más (${activities.length - VISIBLE_HISTORY})`}
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {activities.map((activity: Activity, idx: number) => (
-                  <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                    <div className="flex-1">
-                      <p className="font-medium">{activity.date}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {activity.steps.toLocaleString()} steps · {activity.duration}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                <div className="space-y-3">
+                  {(() => {
+                    // Agrupar actividades por mes (YYYY-MM)
+                    const groups: Record<string, Activity[]> = {};
+                    for (const a of activities) {
+                      const key = a.date ? a.date.slice(0, 7) : 'unknown';
+                      if (!groups[key]) groups[key] = [];
+                      groups[key].push(a);
+                    }
+                    // Ordenar keys (meses) descendente
+                    const monthKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+                    const formatMonthLabel = (monthKey: string) => {
+                      if (monthKey === 'unknown') return 'Fecha desconocida';
+                      const d = new Date(monthKey + '-01');
+                      return d.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+                    };
+
+                    return monthKeys.map((monthKey) => {
+                      const items = groups[monthKey].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                      const expanded = !!expandedMonths[monthKey];
+                      return (
+                        <div key={monthKey} className="border rounded-lg">
+                          <div className="flex items-center justify-between p-3 bg-muted/30">
+                            <div>
+                              <p className="font-semibold">{formatMonthLabel(monthKey)}</p>
+                              <p className="text-xs text-muted-foreground">{items.length} registro{items.length !== 1 ? 's' : ''}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => setExpandedMonths(s => ({ ...s, [monthKey]: !s[monthKey] }))}>
+                                {expanded ? 'Ocultar' : 'Ver'}
+                              </Button>
+                            </div>
+                          </div>
+                          {expanded && (
+                            <div className="p-3 max-h-64 overflow-auto space-y-3">
+                              {items.map((activity, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
+                                  <div className="flex-1">
+                                    <p className="font-medium">{formatDate(activity.date)}</p>
+                                    <p className="text-sm text-muted-foreground">{activity.steps.toLocaleString()} pasos · {activity.duration}</p>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">{activity.duration}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
               </CardContent>
             </Card>
           </div>
