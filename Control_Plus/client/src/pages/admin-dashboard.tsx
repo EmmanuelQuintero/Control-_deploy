@@ -55,12 +55,6 @@ export default function AdminDashboard() {
       <div className="grid gap-6 md:grid-cols-1">
         <UserListTable />
       </div>
-
-      <Card data-testid="card-engagement-stats">
-        <CardHeader>
-          <CardTitle>User Engagement Trends</CardTitle>
-        </CardHeader>
-      </Card>
     </div>
   );
 }

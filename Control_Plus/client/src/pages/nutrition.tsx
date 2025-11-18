@@ -419,7 +419,7 @@ export default function Nutrition() {
               <Label htmlFor="mealType">Tipo de comida</Label>
               <Select value={mealType} onValueChange={setMealType}>
                 <SelectTrigger id="mealType" data-testid="select-meal-type">
-                  <SelectValue placeholder="Select meal type" />
+                  <SelectValue placeholder="Seleccione tipo de comida" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Desayuno">Desayuno</SelectItem>
