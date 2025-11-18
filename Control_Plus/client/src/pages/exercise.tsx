@@ -4,7 +4,7 @@ function formatDate(iso: string) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-#commit
+
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Footprints, Flame, Clock, Edit2, Check, X } from "lucide-react";
