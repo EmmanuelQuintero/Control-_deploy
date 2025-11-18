@@ -26,19 +26,27 @@ import AdminDashboard from "@/pages/admin-dashboard";
 import AdminNotifications from "@/pages/admin-notifications";
 import NotFound from "@/pages/not-found";
 
+// ⭐ IMPORTANTE: tu widget IA flotante
+import AIAssistantWidget from "@/components/AIAssistantWidget";
+
 function Router() {
   const [location, setLocation] = useLocation();
   const { isAuthenticated, isAdmin, user, logout } = useAuth();
   useNotificationsPoller(user?.id ?? user?.id_usuario);
   const reduceMotion = useReducedMotion();
 
-  // Redirigir automáticamente a admin dashboard si es admin y está en rutas de usuario
+  // Redirigir automáticamente a admin dashboard si es admin
   React.useEffect(() => {
     if (isAuthenticated && isAdmin) {
-      // Si está en rutas de usuario, redirigir al admin
-      if (location === '/' || location === '/dashboard' || location === '/exercise' || 
-          location === '/nutrition' || location === '/sleep' || location === '/profile') {
-        setLocation('/admin');
+      if (
+        location === "/" ||
+        location === "/dashboard" ||
+        location === "/exercise" ||
+        location === "/nutrition" ||
+        location === "/sleep" ||
+        location === "/profile"
+      ) {
+        setLocation("/admin");
       }
     }
   }, [isAuthenticated, isAdmin, location, setLocation]);
@@ -61,8 +69,10 @@ function Router() {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">
-                Bienvenido, {user?.nombre} {user?.apellido} 
-                {isAdmin && <span className="text-amber-600 font-medium"> (Admin)</span>}
+                Bienvenido, {user?.nombre} {user?.apellido}
+                {isAdmin && (
+                  <span className="text-amber-600 font-medium"> (Admin)</span>
+                )}
               </span>
               <NotificationBell />
               <Button
@@ -78,6 +88,7 @@ function Router() {
               <ThemeToggle />
             </div>
           </header>
+
           <main className="flex-1 overflow-auto p-6 relative">
             <AnimatePresence mode="wait">
               <motion.div
@@ -85,8 +96,11 @@ function Router() {
                 initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
                 animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                 exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                transition={{ duration: reduceMotion ? 0.12 : 0.18, ease: 'easeOut' }}
-                style={{ position: 'absolute', inset: 0 }}
+                transition={{
+                  duration: reduceMotion ? 0.12 : 0.18,
+                  ease: "easeOut",
+                }}
+                style={{ position: "absolute", inset: 0 }}
               >
                 <Switch>
                   <Route path="/" component={Dashboard} />
@@ -97,7 +111,10 @@ function Router() {
                   <Route path="/profile" component={Profile} />
                   <Route path="/notifications" component={NotificationsPage} />
                   <Route path="/admin" component={AdminDashboard} />
-                  <Route path="/admin/notifications" component={AdminNotifications} />
+                  <Route
+                    path="/admin/notifications"
+                    component={AdminNotifications}
+                  />
                   <Route path="/admin/settings" component={AdminDashboard} />
                   <Route component={NotFound} />
                 </Switch>
@@ -117,6 +134,10 @@ export default function App() {
         <TooltipProvider>
           <AuthProvider>
             <Router />
+
+            {/* ⭐⭐ AQUÍ ESTÁ EL ASISTENTE FLOTANTE ⭐⭐ */}
+            <AIAssistantWidget />
+
             <Toaster />
           </AuthProvider>
         </TooltipProvider>

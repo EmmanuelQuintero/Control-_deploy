@@ -6,10 +6,19 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { runNotificationsSweep } from "./notifications";
+import aiRouter from "./api/ai";
+
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Primero: cargar TODAS las rutas principales
+// (Se inicializa más abajo dentro de la IIFE para evitar await a nivel superior)
+
+// Después: montar el router de IA
+// para que NO sea sobreescrito por routes.ts
+app.use("/api/ai", aiRouter);
 
 app.use((req, res, next) => {
   const start = Date.now();
