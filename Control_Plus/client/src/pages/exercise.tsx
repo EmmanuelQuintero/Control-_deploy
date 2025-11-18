@@ -3,7 +3,7 @@ function formatDate(iso: string) {
   const [yyyy, mm, dd] = iso.split("-");
   return `${dd}/${mm}/${yyyy}`;
 }
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Footprints, Flame, Clock, Edit2, Check, X } from "lucide-react";
 import { StatCard } from "@/components/stat-card";
@@ -358,7 +358,8 @@ export default function Exercise() {
 
                     const formatMonthLabel = (monthKey: string) => {
                       if (monthKey === 'unknown') return 'Fecha desconocida';
-                      const d = new Date(monthKey + '-01');
+                      const [y, m] = monthKey.split('-');
+                      const d = new Date(Number(y), Number(m) - 1, 1);
                       return d.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
                     };
 
