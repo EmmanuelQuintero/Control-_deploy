@@ -3,6 +3,8 @@ function formatDate(iso: string) {
   const [yyyy, mm, dd] = iso.split("-");
   return `${dd}/${mm}/${yyyy}`;
 }
+
+#commit
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Footprints, Flame, Clock, Edit2, Check, X } from "lucide-react";
